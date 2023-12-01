@@ -2,7 +2,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.*;
 import java.nio.channels.*;
-import java.util.concurrent.atomic.AtomicInteger;
+
+class BrowseDestinationException extends Exception {
+    public BrowseDestinationException(String message) {
+        super(message);
+    }
+}
 
 public class FileCopyWithProgress {
     public static void main(String[] args) {
@@ -47,26 +52,8 @@ public class FileCopyWithProgress {
         progressBarPanel.setLayout(new BoxLayout(progressBarPanel, BoxLayout.Y_AXIS)); // Set layout to BoxLayout
         frame.getContentPane().add(progressBarPanel, BorderLayout.CENTER);
 
-        // Create a button for restarting the copy operation
-        JButton restartButton = new JButton("Restart Copy");
-        restartButton.setVisible(false); // Initially, the button is not visible
-        frame.getContentPane().add(restartButton, BorderLayout.SOUTH); // Add the button to the bottom of the frame
-
         // Display the frame
         frame.setVisible(true);
-
-        restartButton.addActionListener(e -> {
-            // Remove all progress bars from the previous operation
-            progressBarPanel.removeAll();
-            frame.validate();
-
-            // Reset the text of the source and destination buttons
-            sourceButton.setText("Browse Source");
-            destButton.setText("Browse Destination");
-
-            // Hide the restart button
-            restartButton.setVisible(false);
-        });
 
         copyButton.addActionListener(e -> {
             // Define the source and destination files
@@ -76,9 +63,6 @@ public class FileCopyWithProgress {
             // Determine the number of threads and the size of each chunk
             int numThreads = 4;
             long chunkSize = sourceFile.length() / numThreads;
-
-            // Create a counter for the completed threads
-            AtomicInteger completedThreads = new AtomicInteger(0);
 
             for (int i = 0; i < numThreads; i++) {
                 // Create a progress bar for this thread
@@ -94,8 +78,10 @@ public class FileCopyWithProgress {
                 // Create a thread for the copy operation
                 Thread copyThread = new Thread(() -> {
                     try (RandomAccessFile sourceRaf = new RandomAccessFile(sourceFile, "r");
-                            RandomAccessFile destRaf = new RandomAccessFile(destFile, "rw")) {
-
+                         RandomAccessFile destRaf = new RandomAccessFile(destFile, "rw")) {
+                        if (destButton.getText() == "Browse Destination"){
+                            throw new BrowseDestinationException("Browse Destination not specified");
+                        }
                         // Move the file pointers to the start position
                         sourceRaf.seek(startPos);
                         destRaf.seek(startPos);
@@ -111,13 +97,14 @@ public class FileCopyWithProgress {
                             int progress = (int) (100 * bytesTransferred / (endPos - startPos));
                             SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
                         }
-
-                        // If all threads have completed, show the restart button
-                        if (completedThreads.incrementAndGet() == numThreads) {
-                            SwingUtilities.invokeLater(() -> restartButton.setVisible(true));
-                        }
                     } catch (IOException ex) {
                         ex.printStackTrace();
+                        // display error to user
+                        JOptionPane.showMessageDialog(frame,"File not found!");
+                    } catch (BrowseDestinationException ex) {
+                        ex.printStackTrace();
+                        JOptionPane.showMessageDialog(frame,"Please choose a browse destination");
+
                     }
                 });
 
